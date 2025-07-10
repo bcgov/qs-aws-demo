@@ -1,0 +1,73 @@
+# Reusable vars for DynamoDB
+x-var:
+  - &DYNAMODB_TABLE_NAME
+    users
+  - &AWS_REGION
+    ca-central-1
+
+# Reusable envars for DynamoDB
+x-dynamodb-vars: &dynamodb-vars
+  DYNAMODB_TABLE_NAME: *DYNAMODB_TABLE_NAME
+  AWS_REGION: *AWS_REGION
+  AWS_ACCESS_KEY_ID: dummy
+  AWS_SECRET_ACCESS_KEY: dummy
+  DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    environment:
+      <<: *dynamodb-vars
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD-SHELL", '[ "$(curl -s -o /dev/null -I -w ''%{http_code}'' http://localhost:8000)" == "400" ]']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # DynamoDB table initialization service
+  dynamodb-init:
+    image: amazon/aws-cli:latest
+    container_name: dynamodb-init
+    environment:
+      <<: *dynamodb-vars
+    volumes:
+      - ./dynamo-migrations-local-env.sh:/dynamo-migrations-local-env.sh:ro
+    entrypoint: ["/bin/sh", "/dynamo-migrations-local-env.sh"]
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+  backend:
+    container_name: backend
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *dynamodb-vars
+      NODE_ENV: development
+      PORT: 3001
+      IS_OFFLINE: 'true'
+      LOG_LEVEL: debug
+    image: ${BACKEND_IMAGE:-backend}
+    build:
+      context: ./backend
+    ports: ["3001:3001"]
+    working_dir: "/app"
+
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+    environment:
+      VITE_BACKEND_URL: http://backend:3001
+      VITE_PORT: 3000
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    image: ${FRONTEND_IMAGE:-frontend}
+    ports: ["3000:3000"]
+    working_dir: "/app"
+    depends_on:
+      backend:
+        condition: service_started
