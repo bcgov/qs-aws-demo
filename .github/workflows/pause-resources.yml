@@ -34,6 +34,7 @@ jobs:
   pause-resources-dev:
     name: Pause Resources Dev
     if: (inputs.app_env == 'dev' || inputs.app_env == 'all' || github.event_name == 'schedule')
+    environment: dev
     needs: [stack-prefix]
     runs-on: ubuntu-24.04
     steps:

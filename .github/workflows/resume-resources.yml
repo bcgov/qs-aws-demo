@@ -34,6 +34,7 @@ jobs:
   resume-resources-dev:
     if: (inputs.app_env == 'dev' || inputs.app_env == 'all' || github.event_name == 'schedule')
     name: Resume Resources Dev
+    environment: dev
     needs: [stack-prefix]
     runs-on: ubuntu-24.04
     steps:
